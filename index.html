@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>番茄钟</title>
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg-1: #0f0e17;
+    --bg-2: #1a1a2e;
+    --text-primary: #fffffe;
+    --text-secondary: rgba(255,255,255,0.65);
+    --text-muted: rgba(255,255,255,0.35);
+    --glass-bg: rgba(255,255,255,0.04);
+    --glass-border: rgba(255,255,255,0.08);
+    --ring-width: 8;
+    --ring-radius: 130;
+  }
+
+  html, body {
+    height: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg-1);
+    color: var(--text-primary);
+    overflow: hidden;
+    user-select: none;
+  }
+
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 1s ease;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(ellipse at 50% 30%, var(--phase-glow) 0%, transparent 70%);
+    opacity: 0.35;
+    transition: background 1s ease;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .app {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    width: 400px;
+    padding: 40px 0;
+  }
+
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 32px;
+    color: var(--text-secondary);
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+  }
+  .header .icon { font-size: 18px; }
+
+  .timer-ring-wrap {
+    position: relative;
+    width: 320px;
+    height: 320px;
+    margin-bottom: 24px;
+  }
+
+  .timer-ring-wrap svg {
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+  }
+
+  .ring-bg {
+    fill: none;
+    stroke: rgba(255,255,255,0.06);
+    stroke-width: var(--ring-width);
+  }
+
+  .ring-progress {
+    fill: none;
+    stroke: var(--phase-color);
+    stroke-width: var(--ring-width);
+    stroke-linecap: round;
+    stroke-dasharray: 816.81;
+    stroke-dashoffset: 0;
+    transition: stroke 0.8s ease, stroke-dashoffset 0.3s linear;
+  }
+
+  .timer-inner {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .phase-label {
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 1px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+    transition: color 0.6s ease;
+  }
+
+  .time-display {
+    font-size: 80px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 2px;
+    line-height: 1;
+    color: var(--text-primary);
+    transition: color 0.6s ease;
+  }
+
+  .phase-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 500;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    color: var(--phase-color);
+    margin-bottom: 28px;
+    transition: color 0.6s ease, border-color 0.6s ease, background 0.6s ease;
+  }
+  .phase-badge .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--phase-color);
+    transition: background 0.6s ease;
+  }
+
+  .stats {
+    display: flex;
+    gap: 32px;
+    margin-bottom: 32px;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  .stats span { display: flex; align-items: center; gap: 5px; }
+  .stats .num {
+    color: var(--text-secondary);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    transition: color 0.6s ease;
+  }
+
+  .controls {
+    display: flex;
+    gap: 16px;
+  }
+
+  .btn {
+    width: 56px;
+    height: 56px;
+    border: none;
+    border-radius: 50%;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    color: var(--text-secondary);
+    font-size: 22px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  .btn:hover { background: rgba(255,255,255,0.1); color: var(--text-primary); }
+  .btn:active { transform: scale(0.92); }
+  .btn:disabled { opacity: 0.25; cursor: not-allowed; transform: none; }
+
+  .btn-primary {
+    width: 64px;
+    height: 64px;
+    font-size: 26px;
+    background: var(--phase-color);
+    border-color: var(--phase-color);
+    color: #fff;
+    box-shadow: 0 0 30px rgba(0,0,0,0.25);
+    transition: all 0.2s ease, background 0.6s ease, border-color 0.6s ease;
+  }
+  .btn-primary:hover { background: var(--phase-color); filter: brightness(1.15); color: #fff; }
+  .btn-primary:active { transform: scale(0.92); filter: brightness(0.9); }
+  .btn-primary.is-paused { background: var(--text-secondary); border-color: var(--text-secondary); }
+
+  .toast {
+    position: fixed;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    padding: 12px 28px;
+    border-radius: 12px;
+    background: rgba(0,0,0,0.75);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 500;
+    opacity: 0;
+    transition: all 0.4s ease;
+    pointer-events: none;
+    z-index: 10;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  @media (max-width: 440px) {
+    .app { width: 100%; padding: 24px 16px; }
+    .timer-ring-wrap { width: 260px; height: 260px; }
+      :root { --ring-radius: 105; }
+    .time-display { font-size: 60px; }
+    .btn { width: 48px; height: 48px; font-size: 18px; }
+   .btn-primary { width: 56px; height: 56px; font-size: 22px; }
+ }
+  .btn-history { position: relative; }
+  .history-panel {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.92);
+    width: 380px;
+    max-height: 70vh;
+    background: rgba(20, 20, 35, 0.92);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border);
+    border-radius: 16px;
+    padding: 24px;
+    overflow-y: auto;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.3s ease;
+    z-index: 20;
+  }
+  .history-panel.show { opacity: 1; pointer-events: auto; transform: translate(-50%, -50%) scale(1); }
+  .history-panel h3 { font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 16px; text-align: center; letter-spacing: 0.5px; }
+  .history-panel .history-summary { display: flex; justify-content: center; gap: 24px; margin-bottom: 20px; font-size: 13px; color: var(--text-secondary); }
+  .history-panel .history-summary strong { color: var(--text-primary); font-weight: 600; }
+  .history-day { margin-bottom: 16px; }
+  .history-day .date-label { font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; letter-spacing: 0.5px; }
+  .history-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 13px; color: var(--text-secondary); border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .history-item:last-child { border-bottom: none; }
+  .history-item .h-icon { font-size: 14px; flex-shrink: 0; }
+  .history-item .h-time { color: var(--text-muted); font-size: 12px; width: 48px; font-variant-numeric: tabular-nums; }
+  .history-item .h-label { flex: 1; }
+  .history-item .h-dur { color: var(--text-muted); font-size: 11px; }
+ .history-empty { text-align: center; color: var(--text-muted); font-size: 13px; padding: 24px 0; }
+ .history-item .h-del {
+   background: none;
+   border: none;
+   color: var(--text-muted);
+   cursor: pointer;
+   font-size: 15px;
+   padding: 2px 6px;
+   border-radius: 4px;
+   transition: all 0.2s ease;
+   opacity: 0;
+   line-height: 1;
+   flex-shrink: 0;
+ }
+ .history-day:hover .history-item .h-del {
+   opacity: 0.6;
+ }
+ .history-item .h-del:hover {
+   opacity: 1 !important;
+   color: #e74c3c;
+ }
+ .btn-clear {
+   background: none;
+   border: 1px solid var(--glass-border);
+   color: var(--text-muted);
+   cursor: pointer;
+   font-size: 12px;
+   padding: 5px 14px;
+   border-radius: 8px;
+   transition: all 0.2s ease;
+ }
+ .btn-clear:hover {
+   color: #e74c3c;
+   border-color: #e74c3c;
+ }
+ .history-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 19;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+  .history-overlay.show { opacity: 1; pointer-events: auto; }
+</style>
+</head>
+<body>
+
+<div class="app" role="main">
+  <div class="header">
+    <span class="icon">🍅</span>
+    <span>番茄钟</span>
+  </div>
+
+  <div class="timer-ring-wrap">
+    <svg viewBox="0 0 320 320" aria-hidden="true">
+      <circle class="ring-bg" cx="160" cy="160" r="130" />
+      <circle class="ring-progress" cx="160" cy="160" r="130" id="ring-progress" />
+    </svg>
+    <div class="timer-inner">
+      <div class="phase-label" id="phase-label">工作中</div>
+      <div class="time-display" id="time-display">25:00</div>
+    </div>
+  </div>
+
+  <div class="phase-badge" id="phase-badge">
+    <span class="dot"></span>
+    <span id="badge-text">第 1 个番茄</span>
+  </div>
+
+  <div class="stats">
+    <span>本轮 <span class="num" id="stat-cycle">1 / 4</span></span>
+    <span>已完成 <span class="num" id="stat-total">0</span> 个番茄</span>
+  </div>
+
+  <div class="controls">
+    <button class="btn" id="btn-reset" title="重置" aria-label="重置">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+    </button>
+    <button class="btn btn-primary" id="btn-primary" title="开始" aria-label="开始">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+    </button>
+   <button class="btn" id="btn-skip" title="跳过当前阶段" aria-label="跳过">
+     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+   </button>
+    <button class="btn" id="btn-history" title="历史记录" aria-label="历史记录">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    </button>
+ </div>
+</div>
+<div class="history-overlay" id="history-overlay"></div>
+<div class="history-panel" id="history-panel">
+  <h3>历史记录</h3>
+  <div class="history-summary">
+    <span>今日 <strong id="hs-today">0</strong> 个番茄</span>
+    <span>总计 <strong id="hs-total">0</strong> 个番茄</span>
+ </div>
+   <div style="text-align:center;margin-bottom:12px;margin-top:-4px;">
+     <button class="btn-clear" id="btn-clear-history">清除所有记录</button>
+   </div>
+ <div id="history-list"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  (() => {
+    'use strict';
+
+    const WORK      = 25 * 60 * 1000;
+    const SHORT_BREAK = 5 * 60 * 1000;
+    const LONG_BREAK = 15 * 60 * 1000;
+   const POMOS_PER_CYCLE = 4;
+    const STORAGE_KEY_STATE = 'tomato_state';
+    const STORAGE_KEY_HISTORY = 'tomato_history';
+
+   const PHASES = {
+      work: {
+        duration: WORK,
+        label: '工作中',
+        color: '#e74c3c',
+        glow: 'rgba(231, 76, 60, 0.5)',
+        bg: ['#0f0e17', '#1a0f0e'],
+      },
+      short_break: {
+        duration: SHORT_BREAK,
+        label: '短休息',
+        color: '#27ae60',
+        glow: 'rgba(39, 174, 96, 0.4)',
+        bg: ['#0f0e17', '#0e1a11'],
+      },
+      long_break: {
+        duration: LONG_BREAK,
+        label: '长休息',
+        color: '#2980b9',
+        glow: 'rgba(41, 128, 185, 0.4)',
+        bg: ['#0f0e17', '#0e141a'],
+      },
+    };
+
+    const state = {
+      phase: 'work',
+      status: 'idle',
+      pomodorosInCycle: 0,
+     totalPomodoros: 0,
+      phaseStartedAt: null,
+     startTimestamp: null,
+      elapsedBeforePause: 0,
+      animFrameId: null,
+    };
+
+    const $ = id => document.getElementById(id);
+    const ringEl      = $('ring-progress');
+    const phaseLabel  = $('phase-label');
+    const timeDisplay = $('time-display');
+    const badgeText   = $('badge-text');
+    const statCycle   = $('stat-cycle');
+    const statTotal   = $('stat-total');
+    const btnPrimary  = $('btn-primary');
+    const btnReset    = $('btn-reset');
+    const btnSkip     = $('btn-skip');
+   const toastEl     = $('toast');
+    const btnHistory  = $('btn-history');
+    const historyPanel = $('history-panel');
+    const historyOverlay = $('history-overlay');
+    const historyList  = $('history-list');
+    const hsToday     = $('hs-today');
+    const hsTotal     = $('hs-total');
+
+   let toastTimer = null;
+    let history = [];
+
+   const R = 130;
+    const C = 2 * Math.PI * R;
+    ringEl.style.strokeDasharray = C;
+
+    function setRingProgress(fraction) {
+      const offset = C * (1 - Math.min(fraction, 1));
+      ringEl.style.strokeDashoffset = offset;
+    }
+
+    function applyPhaseTheme(phase) {
+      const cfg = PHASES[phase];
+      document.documentElement.style.setProperty('--phase-color', cfg.color);
+      document.documentElement.style.setProperty('--phase-glow', cfg.glow);
+      document.body.style.background =
+        `linear-gradient(145deg, ${cfg.bg[0]}, ${cfg.bg[1]})`;
+    }
+
+    function render(remainingMs) {
+      const cfg = PHASES[state.phase];
+      const total = cfg.duration;
+      const elapsed = total - remainingMs;
+      const fraction = total > 0 ? elapsed / total : 0;
+
+      const totalSec = Math.ceil(remainingMs / 1000);
+      const m = String(Math.floor(totalSec / 60)).padStart(2, '0');
+      const s = String(totalSec % 60).padStart(2, '0');
+      timeDisplay.textContent = `${m}:${s}`;
+
+      setRingProgress(fraction);
+
+      phaseLabel.textContent = cfg.label;
+      phaseLabel.style.color = cfg.color;
+
+      badgeText.textContent = state.phase === 'work'
+        ? `第 ${Math.min(state.pomodorosInCycle + 1, POMOS_PER_CYCLE)} 个番茄`
+        : '休息时间';
+
+      statCycle.textContent = `${Math.min(state.pomodorosInCycle + (state.phase === 'work' ? 1 : 0), POMOS_PER_CYCLE)} / ${POMOS_PER_CYCLE}`;
+      statTotal.textContent = state.totalPomodoros;
+    }
+
+    function showToast(msg) {
+      toastEl.textContent = msg;
+      toastEl.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toastEl.classList.remove('show'), 3500);
+    }
+
+    function playChime() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const notes = [523.25, 659.25, 783.99];
+        notes.forEach((freq, i) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.value = freq;
+          const t = ctx.currentTime + i * 0.12;
+          gain.gain.setValueAtTime(0, t);
+          gain.gain.linearRampToValueAtTime(0.25, t + 0.04);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+          osc.connect(gain).connect(ctx.destination);
+          osc.start(t);
+          osc.stop(t + 0.5);
+        });
+        const osc2 = ctx.createOscillator();
+        const gain2 = ctx.createGain();
+        osc2.type = 'sine';
+        osc2.frequency.value = 261.63;
+        const t = ctx.currentTime + 0.36;
+        gain2.gain.setValueAtTime(0, t);
+        gain2.gain.linearRampToValueAtTime(0.15, t + 0.05);
+        gain2.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
+        osc2.connect(gain2).connect(ctx.destination);
+        osc2.start(t);
+        osc2.stop(t + 0.6);
+      } catch (_) {}
+    }
+
+    function sendNotification(title, body) {
+      if (!('Notification' in window)) return;
+      if (Notification.permission === 'granted') {
+        new Notification(title, { body, icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="80" font-size="80">🍅</text></svg>' });
+      } else if (Notification.permission !== 'denied') {
+        Notification.requestPermission();
+      }
+    }
+
+    function notifyPhaseChange(phase) {
+      const cfg = PHASES[phase];
+      if (phase === 'work') {
+        showToast('🍅 休息结束，开始专注！');
+        sendNotification('番茄钟', '休息结束，开始专注！');
+      } else {
+        showToast(`☕ ${cfg.label}时间到了，休息一下吧！`);
+        sendNotification('番茄钟', `${cfg.label}时间到了，休息一下吧！`);
+      }
+      playChime();
+    }
+
+    function getDuration(phase) {
+     return PHASES[phase].duration;
+    }
+
+    function saveState() {
+      try {
+        const data = {
+          phase: state.phase,
+          status: state.status,
+          pomodorosInCycle: state.pomodorosInCycle,
+          totalPomodoros: state.totalPomodoros,
+          phaseStartedAt: state.phaseStartedAt,
+          startTimestamp: state.startTimestamp,
+          elapsedBeforePause: state.elapsedBeforePause,
+          savedAt: Date.now(),
+        };
+        localStorage.setItem(STORAGE_KEY_STATE, JSON.stringify(data));
+      } catch (_) {}
+    }
+
+    function tryRestoreState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY_STATE);
+        if (!raw) return false;
+        const data = JSON.parse(raw);
+        state.phase = data.phase || 'work';
+        state.pomodorosInCycle = data.pomodorosInCycle || 0;
+        state.totalPomodoros = data.totalPomodoros || 0;
+        state.phaseStartedAt = data.phaseStartedAt || null;
+
+        if (data.status === 'running') {
+          const elapsed = data.elapsedBeforePause + (Date.now() - data.startTimestamp);
+          const duration = getDuration(data.phase);
+         if (elapsed >= duration) {
+           advancePhase();
+           return true;
+         }
+          state.status = 'running';
+          state.elapsedBeforePause = elapsed;
+          state.startTimestamp = Date.now();
+        } else if (data.status === 'paused') {
+          state.status = 'paused';
+          state.startTimestamp = null;
+          state.elapsedBeforePause = data.elapsedBeforePause || 0;
+        } else {
+          state.status = 'idle';
+          state.startTimestamp = null;
+          state.elapsedBeforePause = 0;
+        }
+
+        applyPhaseTheme(state.phase);
+        if (state.status === 'idle') {
+          render(getDuration(state.phase));
+          setRingProgress(0);
+        } else {
+          render(getRemainingMs());
+        }
+        if (state.status === 'running') {
+          state.animFrameId = requestAnimationFrame(tick);
+        }
+        updateButtons();
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    function saveHistory() {
+      try {
+        localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(history));
+      } catch (_) {}
+    }
+
+    function loadHistory() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY_HISTORY);
+        if (raw) history = JSON.parse(raw);
+      } catch (_) {
+        history = [];
+      }
+    }
+
+    function addHistoryEntry(type, completed) {
+      const now = Date.now();
+      history.push({
+        type,
+        startedAt: state.phaseStartedAt || now,
+        completedAt: now,
+        duration: getDuration(type),
+        completed,
+      });
+      saveHistory();
+      renderHistory();
+    }
+
+    function getDateLabel(ts) {
+      const d = new Date(ts);
+      const today = new Date();
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      if (d.toDateString() === today.toDateString()) return '今天';
+      if (d.toDateString() === yesterday.toDateString()) return '昨天';
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+
+   function renderHistory() {
+     const todayStr = new Date().toDateString();
+     let todayCount = 0;
+     let totalCount = 0;
+     const groups = {};
+     for (let i = 0; i < history.length; i++) {
+       const entry = history[i];
+       const label = getDateLabel(entry.startedAt);
+       if (!groups[label]) groups[label] = [];
+       groups[label].push({ entry, index: i });
+       if (new Date(entry.startedAt).toDateString() === todayStr) todayCount++;
+       totalCount++;
+     }
+     hsToday.textContent = todayCount;
+     hsTotal.textContent = totalCount;
+     if (history.length === 0) {
+       historyList.innerHTML = '<div class="history-empty">暂无记录</div>';
+       return;
+     }
+     const dateOrder = ['今天', '昨天'];
+     const otherDates = Object.keys(groups).filter(d => !dateOrder.includes(d)).sort((a, b) => b.localeCompare(a));
+     let html = '';
+     for (const label of [...dateOrder, ...otherDates]) {
+       if (!groups[label]) continue;
+       html += '<div class="history-day"><div class="date-label">' + label + '</div>';
+       for (const { entry, index } of groups[label]) {
+         const d = new Date(entry.startedAt);
+         const time = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+         const icon = entry.type === 'work' ? '🍅' : '☕';
+         const labelText = entry.type === 'work' ? '番茄' : (entry.type === 'short_break' ? '短休息' : '长休息');
+         const durMin = Math.round(entry.duration / 60000);
+         const statusText = entry.completed ? '' : ' ⏭';
+         html += '<div class="history-item"><span class="h-icon">' + icon + '</span><span class="h-time">' + time + '</span><span class="h-label">' + labelText + statusText + '</span><span class="h-dur">' + durMin + '分钟</span><button class="h-del" data-index="' + index + '">✕</button></div>';
+       }
+       html += '</div>';
+     }
+     historyList.innerHTML = html;
+   }
+
+   function toggleHistoryPanel() {
+     const show = !historyPanel.classList.contains('show');
+     historyPanel.classList.toggle('show', show);
+     historyOverlay.classList.toggle('show', show);
+     if (show) renderHistory();
+   }
+
+   function deleteHistoryEntry(index) {
+     history.splice(index, 1);
+     saveHistory();
+     renderHistory();
+   }
+
+   function clearAllHistory() {
+     if (history.length === 0) return;
+     history = [];
+     saveHistory();
+     renderHistory();
+     showToast('已清除所有记录');
+   }
+
+   function getRemainingMs() {
+      if (state.status === 'idle') return getDuration(state.phase);
+      if (state.status === 'paused') {
+        const d = getDuration(state.phase);
+        return Math.max(0, d - state.elapsedBeforePause);
+      }
+      const elapsed = state.elapsedBeforePause + (Date.now() - state.startTimestamp);
+      const d = getDuration(state.phase);
+      return Math.max(0, d - elapsed);
+    }
+
+    function enterPhase(phase) {
+      state.phase = phase;
+     state.status = 'idle';
+      state.phaseStartedAt = Date.now();
+      state.startTimestamp = null;
+      state.elapsedBeforePause = 0;
+      applyPhaseTheme(phase);
+      render(getDuration(phase));
+     setRingProgress(0);
+      updateButtons();
+      saveState();
+    }
+
+    function advancePhase(skipHistory) {
+      if (!skipHistory) addHistoryEntry(state.phase, true);
+      if (state.phase === 'work') {
+        state.pomodorosInCycle++;
+        state.totalPomodoros++;
+        if (state.pomodorosInCycle >= POMOS_PER_CYCLE) {
+          state.pomodorosInCycle = 0;
+          enterPhase('long_break');
+        } else {
+          enterPhase('short_break');
+        }
+        notifyPhaseChange(state.phase);
+      } else {
+       enterPhase('work');
+       notifyPhaseChange(state.phase);
+     }
+      saveState();
+    }
+
+    function tick() {
+      if (state.status !== 'running') return;
+
+      const remaining = getRemainingMs();
+      render(remaining);
+
+      if (remaining <= 0) {
+        cancelAnimationFrame(state.animFrameId);
+        state.animFrameId = null;
+        state.status = 'idle';
+        advancePhase();
+        return;
+      }
+
+      state.animFrameId = requestAnimationFrame(tick);
+    }
+
+    function startTimer() {
+      if (state.status === 'running') return;
+      if (state.status !== 'paused') state.elapsedBeforePause = 0;
+      state.startTimestamp = Date.now();
+      state.status = 'running';
+      updateButtons();
+     tick();
+      saveState();
+    }
+
+    function pauseTimer() {
+      if (state.status !== 'running') return;
+      state.elapsedBeforePause += Date.now() - state.startTimestamp;
+      state.startTimestamp = null;
+      state.status = 'paused';
+      if (state.animFrameId) {
+        cancelAnimationFrame(state.animFrameId);
+       state.animFrameId = null;
+     }
+      updateButtons();
+      saveState();
+    }
+
+    function resetTimer() {
+      if (state.status === 'idle') return;
+      if (state.animFrameId) {
+        cancelAnimationFrame(state.animFrameId);
+        state.animFrameId = null;
+      }
+      state.status = 'idle';
+      state.startTimestamp = null;
+      state.elapsedBeforePause = 0;
+      render(getDuration(state.phase));
+      setRingProgress(0);
+     updateButtons();
+      saveState();
+    }
+
+    function skipPhase() {
+      if (state.status === 'idle' && state.phase === 'work') return;
+      if (state.status !== 'idle') addHistoryEntry(state.phase, false);
+      if (state.animFrameId) {
+        cancelAnimationFrame(state.animFrameId);
+        state.animFrameId = null;
+      }
+      state.status = 'idle';
+      state.startTimestamp = null;
+      state.elapsedBeforePause = 0;
+      advancePhase(true);
+    }
+
+    function updateButtons() {
+      const isIdle = state.status === 'idle';
+      const isRunning = state.status === 'running';
+      const isPaused = state.status === 'paused';
+
+      if (isRunning) {
+        btnPrimary.innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>`;
+        btnPrimary.title = '暂停';
+        btnPrimary.classList.remove('is-paused');
+      } else {
+        btnPrimary.innerHTML = `<svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>`;
+        btnPrimary.title = isPaused ? '继续' : '开始';
+        if (isPaused) btnPrimary.classList.add('is-paused');
+        else btnPrimary.classList.remove('is-paused');
+      }
+
+      btnReset.disabled = isIdle;
+      btnSkip.disabled = isIdle;
+    }
+
+    btnPrimary.addEventListener('click', () => {
+      if (state.status === 'running') pauseTimer();
+      else startTimer();
+    });
+
+    btnReset.addEventListener('click', resetTimer);
+    btnSkip.addEventListener('click', skipPhase);
+   btnHistory.addEventListener('click', toggleHistoryPanel);
+   historyOverlay.addEventListener('click', toggleHistoryPanel);
+   historyList.addEventListener('click', (e) => {
+     const btn = e.target.closest('.h-del');
+     if (!btn) return;
+     deleteHistoryEntry(parseInt(btn.dataset.index, 10));
+   });
+   $('btn-clear-history').addEventListener('click', () => {
+     if (history.length === 0) return;
+     clearAllHistory();
+   });
+
+   document.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if (e.key === ' ' || e.key === 'Space') {
+        e.preventDefault();
+        btnPrimary.click();
+      }
+      if (e.key === 'r' || e.key === 'R') btnReset.click();
+      if (e.key === 's' || e.key === 'S') btnSkip.click();
+      if (e.key === 'h' || e.key === 'H') toggleHistoryPanel();
+    });
+
+    loadHistory();
+    const restored = tryRestoreState();
+    if (!restored) {
+      applyPhaseTheme('work');
+      render(WORK);
+      setRingProgress(0);
+      updateButtons();
+    }
+
+    document.addEventListener('click', () => {
+      if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+    }, { once: true });
+
+  })();
+</script>
+</body>
+</html>
